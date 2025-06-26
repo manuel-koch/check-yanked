@@ -2,10 +2,14 @@
 import argparse
 import base64
 import configparser
+import datetime
+import hashlib
 import json
 import logging
 import subprocess
 import sys
+import tempfile
+from datetime import timedelta, time
 from pathlib import Path
 from typing import List, Tuple, Optional
 import socket
@@ -17,6 +21,9 @@ logger = logging.getLogger("check-yanked")
 
 METHOD_PIP_FREEZE = "pipfreeze"
 METHOD_PKG_RESOURCES = "pgkresources"
+
+CACHE_DIR = Path(tempfile.gettempdir()) / "check-yanked"
+MAX_CACHE_AGE = timedelta(hours=6).total_seconds()
 
 
 def http_get(
@@ -140,6 +147,7 @@ def http_get(
 
 
 def get_installed_packages_via_pkg_resources() -> List[Tuple[str, str]]:
+    logger.info("Getting installed packages via pkg_resources")
     try:
         import pkg_resources
     except:
@@ -157,6 +165,7 @@ def get_installed_packages_via_pkg_resources() -> List[Tuple[str, str]]:
 
 
 def get_installed_packages_via_pip_freeze() -> List[Tuple[str, str]]:
+    logger.info("Getting installed packages via pip freeze")
     packages = []
     freeze_output = subprocess.check_output(["pip3", "freeze"], encoding="utf-8")
     for line in freeze_output.split("\n"):
@@ -175,17 +184,38 @@ def check_yanked(
     index_url: str,
     index_username: Optional[str] = None,
     index_password: Optional[str] = None,
+    cached: bool = False,
 ):
     try:
-        index_json_url = urllib.parse.urljoin(index_url, f"pypi/{package}/json")
-        response = http_get(
-            index_json_url, username=index_username, password=index_password
-        )
-        if not response:
+        hasher = hashlib.sha256()
+        hasher.update(f"{package}{index_url}".encode("utf8"))
+        cache_path = CACHE_DIR / f"{package}-{hasher.hexdigest()}.json"
+        if (
+            cached
+            and cache_path.exists()
+            and cache_path.stat().st_mtime + MAX_CACHE_AGE
+            > datetime.datetime.now().timestamp()
+        ):
+            logger.debug(
+                f"Loading cached PyPi index for package {package} from {cache_path}"
+            )
+            index_data = json.loads(cache_path.read_bytes())
+        else:
+            index_json_url = urllib.parse.urljoin(index_url, f"pypi/{package}/json")
+            response = http_get(
+                index_json_url, username=index_username, password=index_password
+            )
+            index_data = json.loads(response)
+            if cached:
+                cache_path.parent.mkdir(exist_ok=True, parents=True)
+                cache_path.write_bytes(response)
+                logger.debug(
+                    f"Caching PyPi index for package {package} to {cache_path}"
+                )
+        if not index_data:
             logger.warning(f"No PyPi details for package {package} found")
             return
-        data = json.loads(response)
-        releases = data.get("releases", {})
+        releases = index_data.get("releases", {})
         version_packages = releases.get(version, [])
         any_package_yanked = False
         for version_package in version_packages:
@@ -206,6 +236,12 @@ def check_yanked(
 
 
 def get_index_url_from_pip_config(config_path: str | Path) -> Tuple[str, str, str]:
+    """
+    Get PyPi index URL from pip config.
+
+    :param config_path: Load pip config from given path
+    :return: Tuple of URL, username, password to access pypi index
+    """
     config = configparser.ConfigParser()
     config.read(config_path)
 
@@ -239,6 +275,8 @@ if __name__ == "__main__":
         description="Identify python packages that are marked as yanked",
     )
     parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("--cache", action="store_true", default=True)
+    parser.add_argument("--no-cache", action="store_false", dest="cache")
     parser.add_argument(
         "-m",
         "--method",
@@ -283,4 +321,11 @@ if __name__ == "__main__":
     logger.info(f"Using PyPi index at {urllib.parse.urlparse(index_url).hostname}")
 
     for package, version in installed_package_versions:
-        check_yanked(package, version, index_url, index_username, index_password)
+        check_yanked(
+            package=package,
+            version=version,
+            index_url=index_url,
+            index_username=index_username,
+            index_password=index_password,
+            cached=args.cache,
+        )
