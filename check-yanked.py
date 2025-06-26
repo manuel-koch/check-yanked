@@ -48,6 +48,10 @@ def http_get(
         )
 
         def send_and_receive(s) -> bytes:
+            """
+            Send the request to the server and read all data.
+            This may include chunked response data!
+            """
             s.sendall(payload)
             data = b""
             while True:
@@ -100,6 +104,7 @@ def http_get(
                         "utf8"
                     )
 
+            # Need to remove the chunk indicators in the received response
             transfer_encoding = headers.get("transfer-encoding", "").lower()
             if transfer_encoding == "chunked":
                 chunked_body_bytes = body_bytes
