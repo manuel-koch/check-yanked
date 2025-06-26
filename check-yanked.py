@@ -113,8 +113,8 @@ def http_get(
                     chunk_size, chunk_data = chunked_body_bytes.split(
                         b"\r\n", maxsplit=1
                     )
-                    chunk_size = int(chunk_size,16)
-                    chunked_body_bytes = chunk_data[chunk_size+2:]
+                    chunk_size = int(chunk_size, 16)
+                    chunked_body_bytes = chunk_data[chunk_size + 2 :]
                     body_bytes += chunk_data[:chunk_size]
 
             # Only return body for successful HTTP responses
