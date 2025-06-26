@@ -144,7 +144,7 @@ def get_installed_packages_via_pkg_resources() -> List[Tuple[str, str]]:
         import pkg_resources
     except:
         logger.error(
-            "Could not import pkg_resources, please install it manually via `pip install --upgrade setuptools`"
+            "Could not import 'pkg_resources', please install it manually via `pip install --upgrade setuptools`"
         )
         return []
 
