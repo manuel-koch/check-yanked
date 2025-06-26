@@ -157,7 +157,6 @@ def get_installed_packages_via_pkg_resources() -> List[Tuple[str, str]]:
 
 
 def get_installed_packages_via_pip_freeze() -> List[Tuple[str, str]]:
-    # To check all installed packages (adapt as needed)
     packages = []
     freeze_output = subprocess.check_output(["pip3", "freeze"], encoding="utf-8")
     for line in freeze_output.split("\n"):
