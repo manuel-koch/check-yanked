@@ -33,10 +33,12 @@ def http_get(
     password: Optional[str] = None,
 ) -> Optional[bytes]:
     """
-    Performs an HTTP GET request using standard Python library.
+    Performs an HTTP GET request using the standard Python library.
 
-    :param url: The URL to request (e.g., "http://www.example.com/path?query=value").
+    :param url: The URL to request (e.g. "http://www.example.com/path?query=value").
     :param port: The port to use (e.g. 80 or 443).
+    :param username: The username to use for basic authenticated request.
+    :param password: The password to use for basic authenticated request.
     :returns The response body or None in case of error.
     """
     sock = None
